@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addKitInstrument,
   buildGridRows,
   changeProjectTempo,
+  countInstrumentHits,
+  createInstrumentDraft,
   createInitialEditorProject,
   getFirstSection,
+  removeKitInstrument,
+  resetProjectKit,
   toggleGridCell
 } from "./editorModel";
 
@@ -74,5 +79,49 @@ describe("editor model", () => {
 
     expect(project.tempo).toBe(120);
     expect(updated.tempo).toBe(132);
+  });
+
+  it("adds a kit instrument", () => {
+    const project = createInitialEditorProject();
+    const updated = addKitInstrument(project, {
+      type: "perc",
+      name: "  Perc  ",
+      midiNote: 75,
+      sampleKey: "  perc  "
+    });
+
+    expect(updated.kit).toHaveLength(project.kit.length + 1);
+    expect(updated.kit.at(-1)).toMatchObject({
+      type: "perc",
+      name: "Perc",
+      midiNote: 75,
+      sampleKey: "perc"
+    });
+  });
+
+  it("removes a kit instrument and dependent hits", () => {
+    const project = createInitialEditorProject();
+    const barId = getFirstSection(project).bars[0]?.id;
+    const kickId = project.kit.find((instrument) => instrument.name === "Kick")?.id;
+
+    if (!barId || !kickId) {
+      throw new Error("Expected initial project to include kick and a bar");
+    }
+
+    const withHit = toggleGridCell(project, barId, kickId, 0);
+    const updated = removeKitInstrument(withHit, kickId);
+
+    expect(updated.kit.some((instrument) => instrument.id === kickId)).toBe(false);
+    expect(countInstrumentHits(updated, kickId)).toBe(0);
+  });
+
+  it("resets the project kit", () => {
+    const project = createInitialEditorProject();
+    const withInstrument = addKitInstrument(project, createInstrumentDraft());
+    const resetProject = resetProjectKit(withInstrument);
+
+    expect(withInstrument.kit).toHaveLength(10);
+    expect(resetProject.kit).toHaveLength(9);
+    expect(resetProject.kit[0]?.name).toBe("Kick");
   });
 });

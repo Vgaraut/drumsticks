@@ -1,17 +1,33 @@
-import { addBar } from "@drumforge/core";
-import { useMemo, useState, type ChangeEvent } from "react";
+import {
+  addBar,
+  type DrumInstrumentPatch,
+  type DrumInstrumentType
+} from "@drumforge/core";
+import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 
 import {
+  addKitInstrument,
   buildGridRows,
   changeProjectTempo,
+  countInstrumentHits,
+  createInstrumentDraft,
   createInitialEditorProject,
   getFirstSection,
+  instrumentTypeLabels,
+  instrumentTypeOptions,
+  removeKitInstrument,
+  resetProjectKit,
   stepLabels,
-  toggleGridCell
+  toggleGridCell,
+  updateKitInstrument,
+  type InstrumentDraft
 } from "./editorModel";
 
 export function App() {
   const [project, setProject] = useState(createInitialEditorProject);
+  const [instrumentDraft, setInstrumentDraft] =
+    useState<InstrumentDraft>(createInstrumentDraft);
+  const [kitError, setKitError] = useState<string | null>(null);
   const section = getFirstSection(project);
   const totalHits = useMemo(
     () =>
@@ -33,6 +49,48 @@ export function App() {
 
   const handleAddBar = () => {
     setProject((currentProject) => addBar(currentProject, section.id));
+  };
+
+  const handleAddInstrument = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    try {
+      setProject(addKitInstrument(project, instrumentDraft));
+      setInstrumentDraft(createInstrumentDraft());
+      setKitError(null);
+    } catch (error) {
+      setKitError(getErrorMessage(error));
+    }
+  };
+
+  const handleInstrumentUpdate = (
+    instrumentId: string,
+    patch: DrumInstrumentPatch
+  ) => {
+    try {
+      setProject(updateKitInstrument(project, instrumentId, patch));
+      setKitError(null);
+    } catch (error) {
+      setKitError(getErrorMessage(error));
+    }
+  };
+
+  const handleInstrumentRemove = (instrumentId: string) => {
+    try {
+      setProject(removeKitInstrument(project, instrumentId));
+      setKitError(null);
+    } catch (error) {
+      setKitError(getErrorMessage(error));
+    }
+  };
+
+  const handleKitReset = () => {
+    try {
+      setProject(resetProjectKit(project));
+      setKitError(null);
+    } catch (error) {
+      setKitError(getErrorMessage(error));
+    }
   };
 
   return (
@@ -64,18 +122,175 @@ export function App() {
 
         <section className="editor-layout" aria-label="Drum grid editor">
           <aside className="kit-panel" aria-label="Kit instruments">
-            <div>
-              <p className="panel-label">Kit</p>
-              <h2>{project.kit.length} instruments</h2>
+            <div className="kit-panel-header">
+              <div>
+                <p className="panel-label">Kit</p>
+                <h2>{project.kit.length} instruments</h2>
+              </div>
+              <button type="button" onClick={handleKitReset}>
+                Reset
+              </button>
             </div>
-            <ul className="kit-list">
+            <p className="kit-warning">
+              Removing an instrument also removes its grid hits.
+            </p>
+            {kitError ? (
+              <p className="error-message" role="alert">
+                {kitError}
+              </p>
+            ) : null}
+            <ul className="kit-editor-list">
               {project.kit.map((instrument) => (
-                <li key={instrument.id}>
-                  <span>{instrument.name}</span>
-                  <small>MIDI {instrument.midiNote}</small>
+                <li className="kit-editor-row" key={instrument.id}>
+                  <div className="instrument-row-top">
+                    <strong>{instrument.name}</strong>
+                    <span>{countInstrumentHits(project, instrument.id)} hits</span>
+                  </div>
+                  <label className="field compact-field">
+                    <span>Name</span>
+                    <input
+                      aria-label={`${instrument.name} name`}
+                      value={instrument.name}
+                      onChange={(event) =>
+                        handleInstrumentUpdate(instrument.id, {
+                          name: event.currentTarget.value
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="field compact-field">
+                    <span>Type</span>
+                    <select
+                      aria-label={`${instrument.name} type`}
+                      value={instrument.type}
+                      onChange={(event) =>
+                        handleInstrumentUpdate(instrument.id, {
+                          type: event.currentTarget.value as DrumInstrumentType
+                        })
+                      }
+                    >
+                      {instrumentTypeOptions.map((instrumentType) => (
+                        <option key={instrumentType} value={instrumentType}>
+                          {instrumentTypeLabels[instrumentType]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="field-pair">
+                    <label className="field compact-field">
+                      <span>MIDI</span>
+                      <input
+                        aria-label={`${instrument.name} MIDI note`}
+                        max={127}
+                        min={0}
+                        type="number"
+                        value={instrument.midiNote}
+                        onChange={(event) => {
+                          const midiNote = event.currentTarget.valueAsNumber;
+
+                          if (!Number.isNaN(midiNote)) {
+                            handleInstrumentUpdate(instrument.id, { midiNote });
+                          }
+                        }}
+                      />
+                    </label>
+                    <label className="field compact-field">
+                      <span>Sample</span>
+                      <input
+                        aria-label={`${instrument.name} sample key`}
+                        value={instrument.sampleKey}
+                        onChange={(event) =>
+                          handleInstrumentUpdate(instrument.id, {
+                            sampleKey: event.currentTarget.value
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <button
+                    className="remove-button"
+                    disabled={project.kit.length === 1}
+                    type="button"
+                    onClick={() => handleInstrumentRemove(instrument.id)}
+                  >
+                    Remove
+                  </button>
                 </li>
               ))}
             </ul>
+            <form className="add-instrument-form" onSubmit={handleAddInstrument}>
+              <div className="instrument-row-top">
+                <strong>Add instrument</strong>
+              </div>
+              <label className="field compact-field">
+                <span>Name</span>
+                <input
+                  aria-label="New instrument name"
+                  value={instrumentDraft.name}
+                  onChange={(event) =>
+                    setInstrumentDraft((draft) => ({
+                      ...draft,
+                      name: event.currentTarget.value
+                    }))
+                  }
+                />
+              </label>
+              <label className="field compact-field">
+                <span>Type</span>
+                <select
+                  aria-label="New instrument type"
+                  value={instrumentDraft.type}
+                  onChange={(event) =>
+                    setInstrumentDraft((draft) => ({
+                      ...draft,
+                      type: event.currentTarget.value as DrumInstrumentType
+                    }))
+                  }
+                >
+                  {instrumentTypeOptions.map((instrumentType) => (
+                    <option key={instrumentType} value={instrumentType}>
+                      {instrumentTypeLabels[instrumentType]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="field-pair">
+                <label className="field compact-field">
+                  <span>MIDI</span>
+                  <input
+                    aria-label="New instrument MIDI note"
+                    max={127}
+                    min={0}
+                    type="number"
+                    value={instrumentDraft.midiNote}
+                    onChange={(event) => {
+                      const midiNote = event.currentTarget.valueAsNumber;
+
+                      if (!Number.isNaN(midiNote)) {
+                        setInstrumentDraft((draft) => ({
+                          ...draft,
+                          midiNote
+                        }));
+                      }
+                    }}
+                  />
+                </label>
+                <label className="field compact-field">
+                  <span>Sample</span>
+                  <input
+                    aria-label="New instrument sample key"
+                    value={instrumentDraft.sampleKey}
+                    onChange={(event) =>
+                      setInstrumentDraft((draft) => ({
+                        ...draft,
+                        sampleKey: event.currentTarget.value
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+              <button type="submit">Add instrument</button>
+            </form>
             <dl className="project-stats">
               <div>
                 <dt>Bars</dt>
@@ -152,4 +367,8 @@ export function App() {
       </div>
     </main>
   );
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unable to update kit";
 }

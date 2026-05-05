@@ -25,6 +25,8 @@ export const drumInstrumentTypeSchema = z.enum([
   "perc"
 ]);
 
+export const drumInstrumentTypes = drumInstrumentTypeSchema.options;
+
 export const staffPositionSchema = z
   .object({
     line: z.number().int(),
@@ -161,6 +163,10 @@ export type DrumHit = z.infer<typeof drumHitSchema>;
 export type DrumBar = z.infer<typeof drumBarSchema>;
 export type DrumSection = z.infer<typeof drumSectionSchema>;
 export type DrumProject = z.infer<typeof drumProjectSchema>;
+export type DrumInstrumentInput = Omit<DrumInstrument, "id"> & {
+  id?: string;
+};
+export type DrumInstrumentPatch = Partial<Omit<DrumInstrument, "id">>;
 
 export type ProjectSummary = {
   title: string;
@@ -296,6 +302,78 @@ export function findInstrument(
   instrumentId: string
 ): DrumInstrument | undefined {
   return project.kit.find((instrument) => instrument.id === instrumentId);
+}
+
+export function addInstrument(
+  project: DrumProject,
+  instrument: DrumInstrumentInput
+): DrumProject {
+  assertValidProject(project);
+
+  const nextInstrument = drumInstrumentSchema.parse({
+    ...instrument,
+    id: instrument.id ?? createNextId(project, "instrument")
+  });
+
+  return validateProject({
+    ...project,
+    kit: [...project.kit, nextInstrument]
+  });
+}
+
+export function removeInstrument(
+  project: DrumProject,
+  instrumentId: string
+): DrumProject {
+  assertValidProject(project);
+  assertInstrumentExists(project, instrumentId);
+
+  const kit = project.kit.filter((instrument) => instrument.id !== instrumentId);
+
+  if (kit.length === 0) {
+    throw new Error("Project kit must include at least one instrument");
+  }
+
+  return validateProject({
+    ...project,
+    kit,
+    sections: removeHitsForInstrument(project.sections, instrumentId)
+  });
+}
+
+export function updateInstrument(
+  project: DrumProject,
+  instrumentId: string,
+  patch: DrumInstrumentPatch
+): DrumProject {
+  assertValidProject(project);
+  assertInstrumentExists(project, instrumentId);
+
+  return validateProject({
+    ...project,
+    kit: project.kit.map((instrument) =>
+      instrument.id === instrumentId
+        ? drumInstrumentSchema.parse({
+            ...instrument,
+            ...patch,
+            id: instrument.id
+          })
+        : instrument
+    )
+  });
+}
+
+export function resetKit(project: DrumProject): DrumProject {
+  assertValidProject(project);
+
+  const kit = createDefaultKit();
+  const kitIds = new Set(kit.map((instrument) => instrument.id));
+
+  return validateProject({
+    ...project,
+    kit,
+    sections: removeHitsOutsideKit(project.sections, kitIds)
+  });
 }
 
 export function getHitAtStep(
@@ -547,6 +625,32 @@ function replaceBar(
       )
     }))
   });
+}
+
+function removeHitsForInstrument(
+  sections: DrumSection[],
+  instrumentId: string
+): DrumSection[] {
+  return sections.map((section) => ({
+    ...section,
+    bars: section.bars.map((bar) => ({
+      ...bar,
+      events: bar.events.filter((hit) => hit.instrumentId !== instrumentId)
+    }))
+  }));
+}
+
+function removeHitsOutsideKit(
+  sections: DrumSection[],
+  instrumentIds: Set<string>
+): DrumSection[] {
+  return sections.map((section) => ({
+    ...section,
+    bars: section.bars.map((bar) => ({
+      ...bar,
+      events: bar.events.filter((hit) => instrumentIds.has(hit.instrumentId))
+    }))
+  }));
 }
 
 function sortHits(events: DrumHit[]): DrumHit[] {

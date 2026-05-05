@@ -52,7 +52,7 @@ pnpm build
 
 `pnpm dev` starts:
 
-- web: http://localhost:5173
-- API: http://localhost:3000
+- web: http://localhost:4310
+- API: http://localhost:4311
 
 The API exposes `GET /health` as the initial scaffold endpoint.

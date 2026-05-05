@@ -3,13 +3,17 @@ import { describe, expect, it } from "vitest";
 import {
   addBar,
   addHit,
+  addInstrument,
   copyBar,
   createDefaultKit,
   createDefaultProject,
   findBar,
   getHitAtStep,
+  removeInstrument,
   removeHit,
+  resetKit,
   toggleHit,
+  updateInstrument,
   updateHitVelocity,
   updateProjectTempo,
   validateProject
@@ -112,6 +116,101 @@ describe("core domain model", () => {
     expect(() =>
       addHit(project, getFirstBarId(project), "instrument-missing", 0, 90)
     ).toThrow(/Instrument/);
+  });
+
+  it("adds an instrument", () => {
+    const project = createDefaultProject();
+    const nextProject = addInstrument(project, {
+      type: "perc",
+      name: "Perc",
+      midiNote: 75,
+      sampleKey: "perc"
+    });
+
+    expect(project.kit).toHaveLength(9);
+    expect(nextProject.kit).toHaveLength(10);
+    expect(nextProject.kit.at(-1)).toMatchObject({
+      id: "instrument-1",
+      type: "perc",
+      name: "Perc",
+      midiNote: 75,
+      sampleKey: "perc"
+    });
+  });
+
+  it("renames an instrument", () => {
+    const project = createDefaultProject();
+    const snareId = getInstrumentId(project, "Snare");
+    const nextProject = updateInstrument(project, snareId, {
+      name: "Side Snare"
+    });
+
+    expect(project.kit.find((instrument) => instrument.id === snareId)?.name).toBe(
+      "Snare"
+    );
+    expect(
+      nextProject.kit.find((instrument) => instrument.id === snareId)?.name
+    ).toBe("Side Snare");
+  });
+
+  it("rejects an invalid MIDI note", () => {
+    const project = createDefaultProject();
+    const snareId = getInstrumentId(project, "Snare");
+
+    expect(() => updateInstrument(project, snareId, { midiNote: 128 })).toThrow();
+  });
+
+  it("removes an instrument and its dependent hits", () => {
+    const project = createDefaultProject();
+    const barId = getFirstBarId(project);
+    const kickId = getInstrumentId(project, "Kick");
+    const snareId = getInstrumentId(project, "Snare");
+    const withHits = addHit(
+      addHit(project, barId, kickId, 0, 90),
+      barId,
+      snareId,
+      4,
+      90
+    );
+
+    const nextProject = removeInstrument(withHits, kickId);
+    const bar = findRequiredBar(nextProject, barId);
+
+    expect(nextProject.kit.some((instrument) => instrument.id === kickId)).toBe(
+      false
+    );
+    expect(bar.events).toHaveLength(1);
+    expect(bar.events[0]?.instrumentId).toBe(snareId);
+    expect(validateProject(nextProject)).toEqual(nextProject);
+  });
+
+  it("resets the kit and clears hits from non-default instruments", () => {
+    const project = createDefaultProject();
+    const barId = getFirstBarId(project);
+    const withCustomInstrument = addInstrument(project, {
+      type: "perc",
+      name: "Perc",
+      midiNote: 75,
+      sampleKey: "perc"
+    });
+    const customInstrumentId = withCustomInstrument.kit.at(-1)?.id;
+
+    if (!customInstrumentId) {
+      throw new Error("Expected addInstrument to create an instrument");
+    }
+
+    const withCustomHit = addHit(
+      withCustomInstrument,
+      barId,
+      customInstrumentId,
+      0,
+      90
+    );
+    const resetProject = resetKit(withCustomHit);
+
+    expect(resetProject.kit).toEqual(createDefaultKit());
+    expect(findRequiredBar(resetProject, barId).events).toEqual([]);
+    expect(validateProject(resetProject)).toEqual(resetProject);
   });
 
   it("adds a bar", () => {
