@@ -3,7 +3,19 @@ import {
   type DrumInstrumentPatch,
   type DrumInstrumentType
 } from "@drumforge/core";
-import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import {
+  createBrowserPlaybackEngine,
+  type PlaybackEngine,
+  type PlaybackPosition
+} from "@drumforge/playback";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent
+} from "react";
 
 import {
   addKitInstrument,
@@ -28,12 +40,31 @@ export function App() {
   const [instrumentDraft, setInstrumentDraft] =
     useState<InstrumentDraft>(createInstrumentDraft);
   const [kitError, setKitError] = useState<string | null>(null);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [loopEnabled, setLoopEnabled] = useState(false);
+  const [currentPosition, setCurrentPosition] = useState<PlaybackPosition | null>(
+    null
+  );
+  const playbackEngineRef = useRef<PlaybackEngine | null>(null);
   const section = getFirstSection(project);
   const totalHits = useMemo(
     () =>
       section.bars.reduce((count, bar) => count + bar.events.length, 0),
     [section.bars]
   );
+
+  useEffect(() => {
+    return () => {
+      playbackEngineRef.current?.dispose();
+    };
+  }, []);
+
+  const getPlaybackEngine = () => {
+    playbackEngineRef.current ??= createBrowserPlaybackEngine();
+
+    return playbackEngineRef.current;
+  };
 
   const handleTempoChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextTempo = event.currentTarget.valueAsNumber;
@@ -49,6 +80,32 @@ export function App() {
 
   const handleAddBar = () => {
     setProject((currentProject) => addBar(currentProject, section.id));
+  };
+
+  const handlePlay = async () => {
+    try {
+      const engine = getPlaybackEngine();
+
+      await engine.playProject(project, {
+        loop: loopEnabled,
+        onStep: setCurrentPosition,
+        onEnded: () => {
+          setCurrentPosition(null);
+          setIsPlaying(false);
+        }
+      });
+      setPlaybackError(null);
+      setIsPlaying(true);
+    } catch (error) {
+      setPlaybackError(getErrorMessage(error));
+      setIsPlaying(false);
+    }
+  };
+
+  const handleStop = () => {
+    playbackEngineRef.current?.stop();
+    setCurrentPosition(null);
+    setIsPlaying(false);
   };
 
   const handleAddInstrument = (event: FormEvent<HTMLFormElement>) => {
@@ -102,6 +159,20 @@ export function App() {
             <h1>{project.title}</h1>
           </div>
           <div className="toolbar">
+            <button type="button" onClick={handlePlay}>
+              Play
+            </button>
+            <button type="button" onClick={handleStop}>
+              Stop
+            </button>
+            <label className="loop-control">
+              <input
+                checked={loopEnabled}
+                type="checkbox"
+                onChange={(event) => setLoopEnabled(event.currentTarget.checked)}
+              />
+              <span>Loop</span>
+            </label>
             <label className="tempo-control">
               <span>Tempo</span>
               <input
@@ -119,6 +190,11 @@ export function App() {
             </button>
           </div>
         </header>
+        {playbackError ? (
+          <p className="error-message playback-error" role="alert">
+            {playbackError}
+          </p>
+        ) : null}
 
         <section className="editor-layout" aria-label="Drum grid editor">
           <aside className="kit-panel" aria-label="Kit instruments">
@@ -314,20 +390,41 @@ export function App() {
                       <p className="panel-label">{section.name}</p>
                       <h2>Bar {bar.index + 1}</h2>
                     </div>
-                    <span>{bar.events.length} hits</span>
+                    <div className="bar-meta">
+                      <span>{bar.events.length} hits</span>
+                      <span>
+                        {currentPosition?.barId === bar.id
+                          ? `Step ${currentPosition.step + 1}`
+                          : isPlaying
+                            ? "Waiting"
+                            : "Stopped"}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="bar-grid" role="grid">
                     <div className="grid-corner" />
-                    {stepLabels.map((label, step) => (
-                      <div
-                        className={step % 4 === 0 ? "step-label beat" : "step-label"}
-                        key={`${bar.id}-step-${step}`}
-                        role="columnheader"
-                      >
-                        {label}
-                      </div>
-                    ))}
+                    {stepLabels.map((label, step) => {
+                      const isCurrentStep =
+                        currentPosition?.barId === bar.id &&
+                        currentPosition.step === step;
+
+                      return (
+                        <div
+                          className={[
+                            "step-label",
+                            step % 4 === 0 ? "beat" : "",
+                            isCurrentStep ? "current-step" : ""
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          key={`${bar.id}-step-${step}`}
+                          role="columnheader"
+                        >
+                          {label}
+                        </div>
+                      );
+                    })}
 
                     {rows.map((row) => (
                       <div className="grid-row" key={`${bar.id}-${row.instrument.id}`}>
@@ -338,7 +435,16 @@ export function App() {
                           <button
                             aria-label={`${row.instrument.name} step ${cell.step + 1}`}
                             aria-pressed={cell.active}
-                            className={cell.active ? "grid-cell active" : "grid-cell"}
+                            className={[
+                              "grid-cell",
+                              cell.active ? "active" : "",
+                              currentPosition?.barId === bar.id &&
+                              currentPosition.step === cell.step
+                                ? "current-step"
+                                : ""
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
                             key={`${row.instrument.id}-${cell.step}`}
                             onClick={() => {
                               setProject((currentProject) =>

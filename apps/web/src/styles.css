@@ -112,6 +112,29 @@ h2 {
   padding: 0 10px;
 }
 
+.loop-control {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #c9d2d8;
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 10px;
+}
+
+.loop-control input {
+  accent-color: #2d7a6a;
+  height: 16px;
+  width: 16px;
+}
+
+.loop-control span {
+  color: #17212b;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
 .tempo-control span {
   color: #5a6b76;
   font-size: 0.82rem;
@@ -177,6 +200,10 @@ h2 {
   background: #fff1ef;
   border: 1px solid #e7aba1;
   color: #8b2b1d;
+}
+
+.playback-error {
+  margin-bottom: 16px;
 }
 
 .kit-editor-list {
@@ -291,7 +318,15 @@ h2 {
   padding: 14px 16px;
 }
 
-.bar-header span {
+.bar-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.bar-meta span {
   background: #e8f3ef;
   border: 1px solid #b6d7cd;
   border-radius: 999px;
@@ -337,6 +372,11 @@ h2 {
   color: #17212b;
 }
 
+.step-label.current-step {
+  background: #d7f0ea;
+  color: #0f4d41;
+}
+
 .instrument-cell {
   align-items: center;
   background: #f7f9fa;
@@ -379,6 +419,14 @@ h2 {
 
 .grid-cell.active {
   background: #fff7e6;
+}
+
+.grid-cell.current-step {
+  background: #e9f8f4;
+}
+
+.grid-cell.active.current-step {
+  background: #ffe9c7;
 }
 
 .grid-cell.active span {

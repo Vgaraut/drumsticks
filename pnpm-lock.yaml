@@ -85,7 +85,11 @@ importers:
 
   packages/export: {}
 
-  packages/playback: {}
+  packages/playback:
+    dependencies:
+      '@drumforge/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/ui: {}
 
