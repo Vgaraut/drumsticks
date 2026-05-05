@@ -7,9 +7,11 @@ import {
   createDefaultKit,
   createDefaultProject,
   findBar,
+  getHitAtStep,
   removeHit,
   toggleHit,
   updateHitVelocity,
+  updateProjectTempo,
   validateProject
 } from "./index.js";
 
@@ -73,6 +75,19 @@ describe("core domain model", () => {
     const withoutHit = toggleHit(withHit, barId, kickId, 0);
 
     expect(findRequiredBar(withoutHit, barId).events).toEqual([]);
+  });
+
+  it("finds a hit at a grid step", () => {
+    const project = createDefaultProject();
+    const barId = getFirstBarId(project);
+    const snareId = getInstrumentId(project, "Snare");
+    const withHit = addHit(project, barId, snareId, 4, 90);
+
+    expect(getHitAtStep(withHit, barId, snareId, 4)).toMatchObject({
+      instrumentId: snareId,
+      step: 4
+    });
+    expect(getHitAtStep(withHit, barId, snareId, 5)).toBeUndefined();
   });
 
   it("rejects an invalid step", () => {
@@ -161,6 +176,20 @@ describe("core domain model", () => {
     const updated = updateHitVelocity(withHit, barId, hitId, 55);
 
     expect(findRequiredBar(updated, barId).events[0]?.velocity).toBe(55);
+  });
+
+  it("updates project tempo", () => {
+    const project = createDefaultProject();
+    const updated = updateProjectTempo(project, 140);
+
+    expect(project.tempo).toBe(120);
+    expect(updated.tempo).toBe(140);
+  });
+
+  it("rejects invalid tempo updates", () => {
+    const project = createDefaultProject();
+
+    expect(() => updateProjectTempo(project, 20)).toThrow();
   });
 
   it("removes a hit", () => {

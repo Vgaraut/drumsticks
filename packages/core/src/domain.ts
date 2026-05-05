@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const idSchema = z.string().min(1);
+const tempoSchema = z.number().int().min(40).max(260);
 const stepSchema = z.number().int().min(0).max(15);
 const velocitySchema = z.number().int().min(1).max(127);
 
@@ -79,7 +80,7 @@ const drumProjectBaseSchema = z
   .object({
     id: idSchema,
     title: z.string().min(1),
-    tempo: z.number().int().min(40).max(260),
+    tempo: tempoSchema,
     timeSignature: timeSignatureSchema,
     resolution: z.literal(16),
     kit: z.array(drumInstrumentSchema).min(1),
@@ -295,6 +296,34 @@ export function findInstrument(
   instrumentId: string
 ): DrumInstrument | undefined {
   return project.kit.find((instrument) => instrument.id === instrumentId);
+}
+
+export function getHitAtStep(
+  project: DrumProject,
+  barId: string,
+  instrumentId: string,
+  step: number
+): DrumHit | undefined {
+  assertValidProject(project);
+  assertInstrumentExists(project, instrumentId);
+  assertValidStep(step);
+
+  return getRequiredBar(project, barId).events.find(
+    (hit) => hit.instrumentId === instrumentId && hit.step === step
+  );
+}
+
+export function updateProjectTempo(
+  project: DrumProject,
+  tempo: number
+): DrumProject {
+  assertValidProject(project);
+  tempoSchema.parse(tempo);
+
+  return validateProject({
+    ...project,
+    tempo
+  });
 }
 
 export function toggleHit(
